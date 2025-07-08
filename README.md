@@ -1,8 +1,8 @@
-## OrderBook Simulation in C++
+## Order Book Simulation in C++
 
-The orderbook can be started with `Main.exe`. You can modify anything in the code, but after that you need to start `CreateNewMain.bat` to verify your new changes.
+The program can be started with `Main.exe`. You can modify anything in the code, but after that you need to start `CreateNewMain.bat` to verify your new changes.
 
-The orderbook has the following built-in features:
+The order book has the following built-in features:
 
 - Supports Market and Limit orders and handles them properly based on FIFO algorithm (price, time priority).
 - Contains the following implemented Time-in-Force types: GoodTillCancel, FillAndKill.
