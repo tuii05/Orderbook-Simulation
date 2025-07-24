@@ -1,6 +1,6 @@
 ## Order Book Simulation in C++
 
-The program can be started with `Main.exe`. You can modify anything in the code, but after that you need to start `CreateNewMain.bat` to verify your new changes.
+The program can be started via `Main.exe`. In case of modifying the code,  `CreateNewMain.bat` should be started to verify the new changes.
 
 The order book has the following built-in features:
 
