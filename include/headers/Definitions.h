@@ -24,6 +24,17 @@ struct Time
     std::string seconds;
     std::string ms;
     double value;
+    Time() = default;
+    Time(const Time &) = default;
+    Time &operator=(const Time &) = default;
+    bool operator<(const Time &other) const
+    {
+        return value < other.value;
+    }
+    bool operator>(const Time &other) const
+    {
+        return value > other.value;
+    }
 };
 
 using Price = std::int32_t;
@@ -42,8 +53,8 @@ struct LevelInfo
 using LevelPointer = std::deque<LevelInfo>;
 using Leveliterator = LevelPointer::iterator;
 
-using LevelInfos_Ask = std::map<Price, LevelPointer>;
-using LevelInfos_Buy = std::map<Price, LevelPointer, std::greater<int>>;
+using LevelInfos_Ask = std::map<Price, std::map<Time, LevelPointer>>;
+using LevelInfos_Buy = std::map<Price, std::map<Time, LevelPointer>, std::greater<int>>;
 
 // Orders
 enum class OrderSide

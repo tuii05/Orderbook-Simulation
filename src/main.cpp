@@ -1,6 +1,8 @@
 #include <algorithm>
 #include "Orderbook.h"
 
+// Could be helpful: storing iterators so don't have to do asks.find(price_) everytime.
+
 void FindSide(OrderBook &orderbook, std::uint16_t &choice, OrderType type, unsigned long int &curr_oid_b, unsigned long int &curr_oid_s);
 
 int main(void)
@@ -62,7 +64,39 @@ int main(void)
     // orderbook.BuyOrder(order5, time_);
     // orderbook.Display();
     // orderbook.CancelOrder(5, 20);
+    Price price_ = 100;
+    Quantity quantity_ = 20;
     orderbook.ListOwnOrders();
+    for (int i = 0; i < 2000000; ++i)
+    {
+        if (i % 9 == 0)
+        {
+            order6.setPrice(++price_);
+            order6.setQuantity(++quantity_);
+        }
+        else
+        {
+            order6.setPrice(--price_);
+            order6.setQuantity(++quantity_);
+        }
+        if (price_ <= 0)
+            price_ = 100;
+        if (quantity_ <= 0)
+            quantity_ = 20;
+        if (i % 2 == 0)
+        {
+            orderside_ = OrderSide::Buy;
+            ++curr_oid_b;
+            orderbook.AddBuyOrder(order6, time_);
+        }
+        else
+        {
+            orderside_ = OrderSide::Sell;
+            ++curr_oid_s;
+            orderbook.AddSellOrder(order6, time_);
+        }
+        ++time_.value;
+    }
     std::uint16_t choice;
     OrderType type;
     OrderSide orderside;

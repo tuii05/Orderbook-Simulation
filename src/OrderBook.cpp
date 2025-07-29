@@ -2,6 +2,25 @@
 #include <algorithm>
 #include <execution>
 
+template<typename BookType>
+void SafePopFront(Price price, Time time_, BookType& Book) {
+    auto iteratorPrice = Book.find(price);
+    if(iteratorPrice != Book.end()) {
+        auto &mapNeeded = iteratorPrice->second;
+        auto iteratorTime = mapNeeded.find(time_);
+        if(iteratorTime != mapNeeded.end() && !iteratorTime->second.empty()) {
+            iteratorTime->second.pop_front();
+            if(iteratorTime->second.empty()) {
+                mapNeeded.erase(iteratorTime);
+                if(mapNeeded.empty()) {
+                    Book.erase(iteratorPrice);
+                }
+            }
+        }
+    }
+}
+
+
 void OrderBook::AddSellOrder(Order &order_, const Time time_)
 {
     LevelInfo newlevel = {
@@ -9,7 +28,7 @@ void OrderBook::AddSellOrder(Order &order_, const Time time_)
         order_.getPrice(),
         order_.getQuantity(),
         time_};
-    asks[order_.getPrice()].push_back({newlevel});
+    asks[order_.getPrice()][time_].push_back({newlevel});
     order_.setOrderSide(OrderSide::Sell);
     while (asks.size() > lim)
     {
@@ -24,7 +43,7 @@ void OrderBook::AddBuyOrder(Order &order_, const Time time_)
         order_.getPrice(),
         order_.getQuantity(),
         time_};
-    bids[order_.getPrice()].push_back({newlevel});
+    bids[order_.getPrice()][time_].push_back({newlevel});
     order_.setOrderSide(OrderSide::Buy);
     while (bids.size() >= lim)
     {
@@ -32,52 +51,56 @@ void OrderBook::AddBuyOrder(Order &order_, const Time time_)
     }
 }
 
-void OrderBook::TryAskOrder(Order &order, const Time time_, Leveliterator min_it)
+void OrderBook::TryAskOrder(Order &order, const Time time_, LevelInfo& min_it)
 {
     Quantity quantity_desired = order.getQuantity();
-    Quantity quantity_has = min_it->quantity_;
+    Quantity quantity_has = min_it.quantity_;
 
     if (quantity_has > quantity_desired)
     {
-        min_it->quantity_ -= quantity_desired;
+        min_it.quantity_ -= quantity_desired;
         order.setQuantity(0);
     }
     else
     {
         order.setQuantity(quantity_desired - quantity_has);
-        asks[order.getPrice()].erase(min_it);
+        SafePopFront(order.getPrice(), time_, asks);
+        //if (!asks[order.getPrice()][time_].empty()) asks[order.getPrice()][time_].pop_front();
     }
 }
 
-void OrderBook::TryBuyOrder(Order &order, const Time time_, Leveliterator min_it)
+void OrderBook::TryBuyOrder(Order &order, const Time time_, LevelInfo &min_it)
 {
     Quantity quantity_desired = order.getQuantity();
-    Quantity quantity_has = min_it->quantity_;
+    Quantity quantity_has = min_it.quantity_;
 
     if (quantity_has > quantity_desired)
     {
-        min_it->quantity_ -= quantity_desired;
+        min_it.quantity_ -= quantity_desired;
         order.setQuantity(0);
     }
     else
     {
         order.setQuantity(quantity_desired - quantity_has);
-        bids[order.getPrice()].erase(min_it);
+        SafePopFront(order.getPrice(), time_, bids);
+        //if (!bids[order.getPrice()][time_].empty()) bids[order.getPrice()][time_].pop_front();
     }
 }
 
-Quantity OrderBook::CalcQuantNeeded(auto &pt, Order &order, const Time time_, int i)
+Quantity OrderBook::CalcQuantNeeded(std::map<Time,LevelPointer> &pt, Order &order, const Time time_, int i)
 {
-    auto start = pt.begin();
-    auto end = pt.end();
-    auto min_it = std::min_element(
-        std::execution::par_unseq,
-        start,
-        end,
-        [](const LevelInfo &a, const LevelInfo &b)
-        {
-            return (a.time_.value < b.time_.value) || (a.time_.value == b.time_.value && a.quantity_ > b.quantity_);
-        });
+    //auto start = pt.begin();
+    //auto end = pt.end();
+    //auto min_it = std::min_element(
+    //    std::execution::par_unseq,
+    //    start,
+    //    end,
+    //    [](const LevelInfo &a, const LevelInfo &b)
+    //    {
+    //        return (a.time_.value < b.time_.value) || (a.time_.value == b.time_.value && a.quantity_ > b.quantity_);
+    //    });
+    auto &curr_list = pt.begin()->second;
+    auto &min_it = curr_list.front();
     Quantity before_ = order.getQuantity();
     i == 1 ? TryAskOrder(order, time_, min_it) : TryBuyOrder(order, time_, min_it);
     return before_ - order.getQuantity();
@@ -172,25 +195,34 @@ void OrderBook::BuyLimitOrder(Order &order, const Time time_)
 
         while (!order_list.empty() && quantity_needed > 0)
         {
-            auto min_it = (order_list.size() > 1)
-                              ? std::min_element(
-                                    std::execution::par_unseq,
-                                    order_list.begin(),
-                                    order_list.end(),
-                                    [](const LevelInfo &a, const LevelInfo &b)
-                                    { return (a.time_.value < b.time_.value) || (a.time_.value == b.time_.value && a.quantity_ > b.quantity_); })
-                              : order_list.begin();
-
-            Quantity available = min_it->quantity_;
+            auto& curr_list = order_list.begin()->second;
+            if (curr_list.empty()) {
+                asks.erase(it);
+                break;
+            }
+            // auto min_it = (order_list.size() > 1)
+            //                   ? std::min_element(
+            //                         std::execution::par_unseq,
+            //                         order_list.begin(),
+            //                         order_list.end(),
+            //                        [](const LevelInfo &a, const LevelInfo &b)
+            //                         { return (a.time_.value < b.time_.value) || (a.time_.value == b.time_.value && a.quantity_ > b.quantity_); })
+            //                   : order_list.begin();
+            auto &min_it = curr_list.front();
+            Quantity available = min_it.quantity_;
             if (available > quantity_needed)
             {
-                min_it->quantity_ -= quantity_needed;
+                min_it.quantity_ -= quantity_needed;
                 quantity_needed = 0;
             }
             else
             {
                 quantity_needed -= available;
-                order_list.erase(min_it);
+                curr_list.pop_front();
+                if (curr_list.empty())
+                {
+                    order_list.erase(order_list.begin());
+                }
             }
         }
 
@@ -218,7 +250,8 @@ void OrderBook::BuyLimitOrder(Order &order, const Time time_)
             AddBuyOrder(order, time_);
             std::cout << "\n[Limit-GTC] Buy order was filled " << (original_quantity - quantity_needed) << "/" << original_quantity << " at an average price of $" << (total_cost / matched_levels) << ".\n";
             std::cout << "\n[Limit-GTC] Buy order placed for " << order.getQuantity() << " items at $" << order.getPrice() << ".\n";
-            ids[order.getOrderID()].push_back(order);
+            //ids[order.getOrderID()] = std::make_pair(order,time_);
+            ids.insert_or_assign(order.getOrderID(), std::make_pair(order, time_));
         }
         else
         {
@@ -261,25 +294,36 @@ void OrderBook::SellLimitOrder(Order &order, const Time time_)
 
         while (!order_list.empty() && quantity_needed > 0)
         {
-            auto min_it = (order_list.size() > 1)
-                              ? std::min_element(
-                                    std::execution::par_unseq,
-                                    order_list.begin(),
-                                    order_list.end(),
-                                    [](const LevelInfo &a, const LevelInfo &b)
-                                    { return (a.time_.value < b.time_.value) || (a.time_.value == b.time_.value && a.quantity_ > b.quantity_); })
-                              : order_list.begin();
+            auto &curr_list = order_list.begin()->second;
+            if (curr_list.empty())
+            {
+                break;
+            }
+            //auto min_it = (order_list.size() > 1)
+            //                  ? std::min_element(
+            //                        std::execution::par_unseq,
+            //                        order_list.begin(),
+            //                        order_list.end(),
+            //                        [](const LevelInfo &a, const LevelInfo &b)
+            //                        { return (a.time_.value < b.time_.value) || (a.time_.value == b.time_.value && a.quantity_ > b.quantity_); })
+            //                  : order_list.begin();
 
-            Quantity available = min_it->quantity_;
+            auto &min_it = curr_list.front();
+
+            Quantity available = min_it.quantity_;
             if (available > quantity_needed)
             {
-                min_it->quantity_ -= quantity_needed;
+                min_it.quantity_ -= quantity_needed;
                 quantity_needed = 0;
             }
             else
             {
                 quantity_needed -= available;
-                order_list.erase(min_it);
+                curr_list.pop_front();
+                if (curr_list.empty())
+                {
+                    order_list.erase(order_list.begin());
+                }
             }
         }
 
@@ -308,7 +352,8 @@ void OrderBook::SellLimitOrder(Order &order, const Time time_)
             if (matched_levels > 0)
                 std::cout << "\n[Limit-GTC] Sell order was filled " << (original_quantity - quantity_needed) << "/" << original_quantity << " at an average price of $" << (total_cost / matched_levels) << ".\n";
             std::cout << "\n[Limit-GTC] Sell order placed for " << order.getQuantity() << " items at $" << order.getPrice() << ".\n";
-            ids[order.getOrderID()].push_back(order);
+            //ids[order.getOrderID()] = std::make_pair(order,time_);
+            ids.insert_or_assign(order.getOrderID(), std::make_pair(order, time_));
         }
         else
         {
@@ -372,7 +417,8 @@ void OrderBook::BuyMarketOrder(Order &order, const Time time_)
                 order.setPrice(original_price);
                 std::cout << "\n[Market] A buy order was created for " << order.getQuantity() << " items at a price of $" << order.getPrice() << ".\n";
                 AddBuyOrder(order, time_);
-                ids[order.getOrderID()].push_back({order});
+                //ids[order.getOrderID()] = std::make_pair(order,time_);
+                ids.insert_or_assign(order.getOrderID(), std::make_pair(order, time_));
             }
             else
             {
@@ -439,7 +485,8 @@ void OrderBook::SellMarketOrder(Order &order, const Time time_)
                 order.setOrderSide(OrderSide::Sell);
                 std::cout << "\n[Market] A sell order was created for " << order.getQuantity() << " items at a price of " << order.getPrice() << ".\n";
                 AddSellOrder(order, time_);
-                ids[order.getOrderID()].push_back({order});
+                //ids[order.getOrderID()] = std::make_pair(order, time_);
+                ids.insert_or_assign(order.getOrderID(), std::make_pair(order, time_));
             }
             else
             {
@@ -479,82 +526,55 @@ void OrderBook::MakeOrder(Order &order, const Time time_)
     }
 }
 
-void OrderBook::CancelOrder(OrderID orderid, Quantity expected_to_remove)
-{
-    auto it_ = ids.find(orderid);
-    if (it_ == ids.end())
+void OrderBook::CancelOrder(OrderID orderID, Quantity expected_to_remove) {
+    auto order_iterator = ids.find(orderID);
+    if (order_iterator == ids.end())
     {
-        std::cout << "Invalid Order ID!\n";
-        // throw std::runtime_error("Invalid Order ID");
+        std::cout << std::endl << "Invalid Order ID!" << std::endl;
+        return;
     }
-    else
-    {
-        auto order_ptr = it_->second.begin();
-        auto side_ = order_ptr->getOrderSide();
-        Price price_ = order_ptr->getPrice();
-        if (side_ == OrderSide::Buy)
+    else {
+        Price priceNeeded = order_iterator->second.first.getPrice();
+        Time timeNeeded = order_iterator->second.second;
+        OrderSide side = order_iterator->second.first.getOrderSide();
+        if(side == OrderSide::None) {
+            std::cout << std::endl <<"Order has _None_ set as side, removing it entirely." << std::endl;
+            ids.erase(orderID);
+            return;
+        }
+        LevelPointer& sideNeeded = (side == OrderSide::Buy) ? bids[priceNeeded][timeNeeded] : asks[priceNeeded][timeNeeded];
+        auto start = sideNeeded.begin();
+        auto end = sideNeeded.end();
+        if(!sideNeeded.empty())
         {
-            auto it_buy = bids.find(price_);
-            if (it_buy == bids.end())
+            auto iterator = std::find_if(start, end, [orderID](const LevelInfo &o) { return o.orderid_ == orderID; });
+            if (iterator == sideNeeded.end())
             {
-                throw std::domain_error("Couldn't find the price for the OrderID");
+                std::cout << "\nOrder ID not found at the specified price/time level.\n";
+                return;
+            }
+            if(iterator->quantity_ > expected_to_remove)
+            {
+                iterator->quantity_ -= expected_to_remove;
+                order_iterator->second.first.setQuantity(iterator->quantity_);
+                (side == OrderSide::Buy)
+                    ? std::cout << "\nRemoved " << expected_to_remove << " piece(s) from OrderID #" << orderID << " (Buy Side).\n"
+                    : std::cout << "\nRemoved " << expected_to_remove << " piece(s) from OrderID #" << orderID << " (Ask Side).\n";
             }
             else
             {
-                auto &buy_ptr = it_buy->second;
-                auto iterator = std::find_if(buy_ptr.begin(), buy_ptr.end(),
-                                             [orderid](const LevelInfo &o)
-                                             { return o.orderid_ == orderid; });
-
-                if (iterator != buy_ptr.end())
-                {
-                    if (iterator->quantity_ > expected_to_remove)
-                    {
-                        iterator->quantity_ -= expected_to_remove;
-                        it_->second.front().setQuantity(iterator->quantity_);
-                        std::cout << "\nRemoved " << expected_to_remove << " piece(s) from OrderID #" << orderid << " (Buy).\n";
-                    }
-                    else
-                    {
-                        std::cout << "\nRemoved OrderID #" << orderid << " entirely from Bids side. (Missing " << (expected_to_remove - iterator->quantity_) << " piece(s).)\n";
-                        buy_ptr.erase(iterator);
-                        if (buy_ptr.empty() == true)
-                            bids.erase(it_buy);
-                    }
+                (side == OrderSide::Buy)
+                    ? std::cout << "\nRemoved OrderID #" << orderID << " entirely from Bids side. (Missing " << (expected_to_remove - iterator->quantity_) << " piece(s).)\n"
+                    : std::cout << "\nRemoved OrderID #" << orderID << " entirely from Asks side. (Missing " << (expected_to_remove - iterator->quantity_) << " piece(s).)\n";
+                sideNeeded.erase(iterator);
+                if(sideNeeded.empty()) {
+                    (side == OrderSide::Buy) ? bids[priceNeeded].erase(timeNeeded) : asks[priceNeeded].erase(timeNeeded);
                 }
             }
         }
-        else
-        {
-            auto it_ask = asks.find(price_);
-            if (it_ask == asks.end())
-                return;
-
-            auto &ask_ptr = it_ask->second;
-            auto iterator = std::find_if(ask_ptr.begin(), ask_ptr.end(),
-                                         [orderid](const LevelInfo &o)
-                                         { return o.orderid_ == orderid; });
-            if (iterator != ask_ptr.end())
-            {
-                if (iterator->quantity_ >= expected_to_remove)
-                {
-                    iterator->quantity_ -= expected_to_remove;
-                    it_->second.front().setQuantity(iterator->quantity_);
-                    std::cout << "Removed " << expected_to_remove << " piece(s) from OrderID #" << orderid << " (Ask).\n";
-                }
-                else
-                {
-                    std::cout << "Removed OrderID #" << orderid << " entirely from Asks side. (Missing " << (expected_to_remove - iterator->quantity_) << " piece(s).)\n";
-                    ask_ptr.erase(iterator);
-                    if (ask_ptr.empty())
-                        asks.erase(it_ask);
-                }
-            }
-        }
-        if (expected_to_remove >= order_ptr->getQuantity())
-            ids.erase(it_);
     }
 }
+
 
 #define Red "\033[1;31m"
 #define Green "\033[1;32m"
@@ -673,12 +693,10 @@ void OrderBook::CreateOrder(OrderType type, OrderSide orderside, Time_in_Force t
 
 void OrderBook::ListOwnOrders()
 {
-    for (auto &[orderid, orderptr] : ids)
+    for (auto &[orderid, orderpair] : ids)
     {
-        for (auto &order : orderptr)
-        {
-            std::cout << "\n"  << orderid << "       $" << order.getPrice() << "      " << order.getQuantity() << "\n";
-        }
+        auto order = orderpair.first;
+        std::cout << "\n"  << orderid << "       $" << order.getPrice() << "      " << order.getQuantity() << "\n";
     }
 }
 
@@ -697,105 +715,118 @@ void OrderBook::Display()
         return oss.str();
     };
 
+    auto get_order_range = [](auto &priceLevel) -> std::pair<Leveliterator, Leveliterator>
+    {
+        if (!priceLevel.empty() && !priceLevel.begin()->second.empty())
+        {
+            return {priceLevel.begin()->second.begin(), priceLevel.begin()->second.end()};
+        }
+        else
+        {
+            return {{}, {}};
+        }
+    };
+
     auto askCurr = asks.begin();
     auto askEnd = asks.end();
     auto buyCurr = bids.begin();
     auto buyEnd = bids.end();
+
     Leveliterator askOrderCurr, askOrderEnd;
     Leveliterator buyOrderCurr, buyOrderEnd;
-    bool hasAsk = (askCurr != asks.end());
-    bool hasBuy = (buyCurr != bids.end());
-    std::uint32_t BuyLevelsPrinted = 0;
-    std::uint32_t SellLevelsPrinted = 0;
-    std::cout << "\n";
-    std::cout
-        << Green << std::left << std::setw(columnWidth) << "Bids (Buy)"
-        << std::string(gap, ' ')
-        << Red << std::right << std::setw(columnWidth) << "Asks (Sell)"
-        << NC << '\n';
-    for (int i = 0; i <= 2 * columnWidth + 4; ++i)
-    {
-        std::cout << "=";
-    }
-    std::cout << "\n";
+
+    bool hasAsk = (askCurr != askEnd) &&
+                  !askCurr->second.empty() &&
+                  !askCurr->second.begin()->second.empty();
+
+    bool hasBuy = (buyCurr != buyEnd) &&
+                  !buyCurr->second.empty() &&
+                  !buyCurr->second.begin()->second.empty();
+
     if (hasAsk)
     {
-        askOrderCurr = askCurr->second.begin();
-        askOrderEnd = askCurr->second.end();
+        std::tie(askOrderCurr, askOrderEnd) = get_order_range(askCurr->second);
     }
     if (hasBuy)
     {
-        buyOrderCurr = buyCurr->second.begin();
-        buyOrderEnd = buyCurr->second.end();
+        std::tie(buyOrderCurr, buyOrderEnd) = get_order_range(buyCurr->second);
     }
-    while (hasAsk || hasBuy)
+
+    std::uint32_t BuyLevelsPrinted = 0;
+    std::uint32_t SellLevelsPrinted = 0;
+
+    std::cout << "\n";
+    std::cout << Green << std::left << std::setw(columnWidth) << "Bids (Buy)"
+              << std::string(gap, ' ')
+              << Red << std::right << std::setw(columnWidth) << "Asks (Sell)"
+              << NC << '\n';
+
+    std::cout << std::string(2 * columnWidth + gap, '=') << '\n';
+
+    while (hasBuy || hasAsk)
     {
-        if (hasBuy)
+        // --- Print Buy Side ---
+        if (hasBuy && BuyLevelsPrinted < PrintSize)
         {
-            if (BuyLevelsPrinted >= PrintSize)
-            {
-                hasBuy = false;
-            }
             std::cout << Green
                       << std::setw(priceWidth) << format_price(buyCurr->first) << "  "
                       << std::setw(quantityWidth) << buyOrderCurr->quantity_ << "  "
                       << std::setw(timeWidth) << PrintTime(FormatToTime(buyOrderCurr->time_.value)) << NC;
             ++buyOrderCurr;
             ++BuyLevelsPrinted;
+
             if (buyOrderCurr == buyOrderEnd)
             {
                 ++buyCurr;
-                if (buyCurr != bids.end())
+                hasBuy = (buyCurr != buyEnd &&
+                          !buyCurr->second.empty() &&
+                          !buyCurr->second.begin()->second.empty());
+
+                if (hasBuy)
                 {
-                    buyOrderCurr = buyCurr->second.begin();
-                    buyOrderEnd = buyCurr->second.end();
-                }
-                else
-                {
-                    hasBuy = false;
+                    std::tie(buyOrderCurr, buyOrderEnd) = get_order_range(buyCurr->second);
                 }
             }
         }
         else
         {
-            std::cout << std::string(priceWidth + 2 + quantityWidth + 2 + timeWidth, ' ');
+            std::cout << std::string(columnWidth, ' ');
+            hasBuy = false;
         }
+
         std::cout << std::string(gap, ' ');
-        if (hasAsk)
+
+        // --- Print Ask Side ---
+        if (hasAsk && SellLevelsPrinted < PrintSize)
         {
-            if (SellLevelsPrinted >= PrintSize)
-            {
-                hasAsk = false;
-            }
             std::cout << Red
                       << std::setw(priceWidth) << format_price(askCurr->first) << "  "
                       << std::setw(quantityWidth) << askOrderCurr->quantity_ << "  "
                       << std::setw(timeWidth) << PrintTime(FormatToTime(askOrderCurr->time_.value)) << NC;
             ++askOrderCurr;
             ++SellLevelsPrinted;
+
             if (askOrderCurr == askOrderEnd)
             {
                 ++askCurr;
-                if (askCurr != asks.end())
+                hasAsk = (askCurr != askEnd &&
+                          !askCurr->second.empty() &&
+                          !askCurr->second.begin()->second.empty());
+
+                if (hasAsk)
                 {
-                    askOrderCurr = askCurr->second.begin();
-                    askOrderEnd = askCurr->second.end();
-                }
-                else
-                {
-                    hasAsk = false;
+                    std::tie(askOrderCurr, askOrderEnd) = get_order_range(askCurr->second);
                 }
             }
         }
         else
         {
-            std::cout << std::string(priceWidth + 2 + quantityWidth + 2 + timeWidth, ' ');
+            std::cout << std::string(columnWidth, ' ');
+            hasAsk = false;
         }
+
         std::cout << '\n';
     }
-    for (int i = 0; i <= 2 * columnWidth + 4; ++i)
-    {
-        std::cout << "=";
-    }
-    std::cout << "\n";
+
+    std::cout << std::string(2 * columnWidth + gap, '=') << '\n';
 }

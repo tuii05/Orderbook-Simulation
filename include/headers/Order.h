@@ -22,6 +22,9 @@ public:
         , quantity_(quantity_)
         , tif_(tif_)
     {}
+    Order(const Order&) = default;
+    Order &operator=(const Order &) = default;
+public:
     //Getters
     OrderType getOrderType() { return ordertype_; }
     OrderID getOrderID() { return orderid_; }
