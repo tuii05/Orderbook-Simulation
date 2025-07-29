@@ -8,7 +8,7 @@ The order book has the following built-in features:
 - Contains the following implemented Time-in-Force types: GoodTillCancel, FillAndKill.
 - Real-time display of bids and asks orders, new orders are displayed with real-time.
 - User interaction with a simple terminal-based menu.
-- Should work with not too large data size limits as well. (Tested with 1 million data in the container, there were some lags with this much data when doing 10^6/10^7 buys/sells at once for instance)
+- Changeable limit on OrderBoook size.
 
 To do:
 - multithreading.
