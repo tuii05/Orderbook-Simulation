@@ -8,7 +8,7 @@ The order book has the following built-in features:
 - Contains the following implemented Time-in-Force types: GoodTillCancel, FillAndKill.
 - Real-time display of bids and asks orders, new orders are displayed with real-time.
 - User interaction with a simple terminal-based menu.
-- Changeable limit on OrderBoook size.
+- Changeable limit on Order Book size.
 
 To do:
 - multithreading.
