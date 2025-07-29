@@ -1,4 +1,4 @@
-## Order Book Simulation in C++
+## Order Book Simulation in C++ - V1.0 (New: V1.1)
 
 The program can be started via `Main.exe`. In case of modifying the code,  `CreateNewMain.bat` should be started to verify the new changes.
 
