@@ -1,6 +1,6 @@
-## Order Book Simulation in C++ - V1.1
+## Order Book Simulation in C++ - V1.2
 
-The program can be started via `Main.exe`. In case of modifying the code,  `CreateNewMain.bat` should be started to verify the new changes.
+An updated version of the V1.1 Order Book featuring improved code readability and performance optimizations, with more efficient use of built-in C++ functions.
 
 The order book has the following built-in features:
 
@@ -11,4 +11,4 @@ The order book has the following built-in features:
 - Changeable limit on Order Book size.
 
 To do:
-- multithreading.
+- The test file of the orderbook.
