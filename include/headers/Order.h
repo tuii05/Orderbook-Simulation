@@ -1,43 +1,65 @@
-#include "Functions.h"
+#pragma once
+//Representing an order
 
-#ifndef ORDER_H_INCLUDED
-#define ORDER_H_INCLUDED
+#include "Def.h"
+#include "EventTime.h"
 
-class Order
-{
-private:
-    OrderType ordertype_;
-    OrderID orderid_;
-    OrderSide orderside_;
-    Price price_;
-    Quantity quantity_;
-    Time_in_Force tif_;
+template<typename QuantityType, typename IDType, typename PriceType>
+class Order {
+    private:
+        PriceType price;
+        QuantityType quantity;
+        IDType orderID;
+        OrderType orderType;
+        OrderSide orderSide;
+        TimeInForceType timeInForce;
+        EventTime eventTime;
+    public:
+        Order(PriceType price, QuantityType quantity, IDType orderID, OrderType orderType, OrderSide orderSide, TimeInForceType timeInForce, const EventTime& eventTime)
+        : price(price)
+        , quantity(quantity)
+        , orderID(orderID)
+        , orderType(orderType)
+        , orderSide(orderSide)
+        , timeInForce(timeInForce)
+        , eventTime(eventTime)
+        {};
 
-public:
-    Order(OrderType ordertype_, OrderID orderid_, OrderSide orderside_, Price price_, Quantity quantity_, Time_in_Force tif_)
-        : ordertype_(ordertype_)
-        , orderid_(orderid_)
-        , orderside_(orderside_)
-        , price_(price_)
-        , quantity_(quantity_)
-        , tif_(tif_)
-    {}
-    Order(const Order&) = default;
-    Order &operator=(const Order &) = default;
-public:
-    //Getters
-    OrderType getOrderType() { return ordertype_; }
-    OrderID getOrderID() { return orderid_; }
-    OrderSide getOrderSide() { return orderside_; }
-    Price getPrice() { return price_; }
-    Quantity getQuantity() { return quantity_; }
-    Time_in_Force getTIF() { return tif_; }
-    //Setters
-    void setQuantity(Quantity val) { quantity_ = val; }
-    void setPrice(Price val) { price_ = val; }
-    void setOrderSide(OrderSide val) { orderside_ = val; }
-    void setOrderID(OrderID val) { orderid_ = val; }
-    void setOrderType(OrderType val) { ordertype_ = val; }
+        Order()
+        : price(0)
+        , quantity(0)
+        , orderID(0)
+        , orderType(OrderType::None)
+        , orderSide(OrderSide::None)
+        , timeInForce(TimeInForceType::None)
+        , eventTime()
+        {};
+
+        Order(const Order &) = default;
+        Order &operator=(const Order &) = default;
+
+        Order(Order &&) = default;
+        Order &operator=(Order &&) = default;
+
+    public:
+        PriceType getPrice() const { return price; }
+        QuantityType getQuantity() const { return quantity; }
+        IDType getOrderID() const { return orderID; }
+        OrderType getOrderType() const { return orderType; }
+        OrderSide getOrderSide() const { return orderSide; }
+        TimeInForceType getTimeInForceType() const { return timeInForce; }
+        double getTimeValue() const { return eventTime.getTimeValue(); }
+        const EventTime& getEventTime() const { return eventTime; }
+
+    public:
+        void setPrice(PriceType price_) { price = price_; }
+        void setQuantity(QuantityType quantity_) { quantity = quantity_; }
+        void setOrderID(IDType orderID_) { orderID = orderID_; }
+        void setOrderType(OrderType orderType_) { orderType = orderType_; }
+        void setOrderSide(OrderSide orderSide_) { orderSide = orderSide_; }
+        void setTimeInForceType(TimeInForceType timeInForce_) { timeInForce = timeInForce_; }
+        void setTimeValue(double seconds) { eventTime.setTimeValue(seconds); }
+
+    public:
+        void print() const;
 };
-
-#endif // ORDER_H
